@@ -5,3 +5,38 @@ Note: a puppetmasterd server is not authoritative. If you want to know what your
 (i.e. "Authoritative" == "where everything that isn't a puppet client looks for this information.")
 
 Sure, the puppetmasterd may change that information in the authoritative source, but until it does, all the clients will use what DNS says anyway, so there's no point in configuring a system for what the state *will be*, you need it configured for what the state *actually is*.
+
+So this little module just queries the system, DNS, and LDAP for my current desired states, and populates variables in my erbs that may be iterated on. This was originally put together to pair ip the remote and sainfo sections of a racoon.conf file, so let's look at what that file needs as an example...
+
+== 
+
+I need:
+   # what facter provides "out of the box"
+   my_hostname     facter:host facter:fqdn
+   my_ip           facter:ipaddress
+   my_domain       facter:domain
+
+   # custom facts we wrote
+   my_basedn       facter:base_dn           || derived from domain
+   my_binddn       facter:bind_dn           || derived from $hostname & $domain
+   my_bindpw       facter:bind_pw           || derived from `secret`
+   anon_binddn     facter:anonymous_bind_dn
+   anon_bindpw     facter:anonymous_bind_pw
+
+   # things not suited for facts at all, because they're multi-valued key-value sets (suited for LDAP)
+
+   my_vpn          ldap: cn=${domain},ou=VPNs,ou=Sets,${basedn}
+   my_dhcp_network ldap: cn=${host}-vpn-anon,ou=Networks,${basedn}
+   my_dhcp_netmask ldap: cn=${host}-vpn-anon,ou=Networks,${basedn}
+
+   am_i_ldap_host  dns srv || ldap relativeDomainName(srv)
+
+   pool_size       derive from my_dhcp_netmask
+
+   @peers          ldap: cn=${domain},ou=VPNs,ou=Sets,${basedn} (uniquMembers)
+   hostname[peer]  ldap: <peer_dn>:cn
+   ipaddr[peer]    ldap: <peer_dn>:ipHostNumber (not in an ou=Network?) || dns?
+                   ldap: relativeDomainName=<peer:cn>,dc=websages,dc=com,ou=DNS,${basedn}
+
+
+==
