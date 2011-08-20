@@ -1,1 +1,7 @@
-Whenever I'm creating erb templates for config files in puppet, I find the single-valued facts that facter provides to be very limiting. When I want to do something like re-configure a VPN, I need to be able to query external sources and get the data from the *authorititative* source to make a config change. Note: a puppetmasterd server is not authoritative. If you want to know what your domains MX records are, you don't query a puppetmasterd, because it doesn't matter what the puppetmasterd thinks the state should be. It's the actual DNS records that clients are going to send mail to. "Authoritative" == "where everything that isn't a puppet client looks for this information."
+Whenever I'm creating erb templates for config files in puppet, I find the single-valued facts that facter provides to be very limiting. When I want to do something like re-configure a VPN, or shift mail server load around, I need to be able to query external sources and get the data from the *authorititative* source to make a config change. 
+
+Note: a puppetmasterd server is not authoritative. If you want to know what your domain's MX records are, you don't query a puppetmasterd, because it doesn't matter what the puppetmasterd thinks the state should be. It's the actual MX records *in DNS* that clients are going to send mail to. 
+
+(i.e. "Authoritative" == "where everything that isn't a puppet client looks for this information.")
+
+Sure, the puppetmasterd may change that information in the authoritative source, but until it does, all the clients will use what DNS says anyway, so there's no point in configuring a system for what the state *will be*, you need it configured for what the state *actually is*.
