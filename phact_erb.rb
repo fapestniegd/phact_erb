@@ -3,7 +3,7 @@
 # ecternal facts we can use to populate erbs
 ################################################################################
 
-class Phacterb
+class PhactERB
   ################################################################################
   # "phacts"                                                                     #
   def fqdn
@@ -251,7 +251,7 @@ class Phacterb
 # "tests"                                                                      #
 
 require 'pp' 
-p = Phacterb.new
+p = PhactERB.new
 domain = p.domainname
 data ={
         :fqdn     => p.fqdn,
