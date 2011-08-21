@@ -39,4 +39,124 @@ I need:
                    ldap: relativeDomainName=<peer:cn>,dc=websages,dc=com,ou=DNS,${basedn}
 
 
+
 ==
+
+so a block of code like:
+
+p = PhactERB.new
+data ={
+        :fqdn     => p.fqdn,
+        :hostname => p.hostname,
+        :domain   => p.domainname,
+        :basedn   => p.basedn,
+        :binddn   => p.binddn,
+        #:bindpw   => p.bindpw,
+        #:secret   => p.secret,
+        :ipaddress => p.default_ipaddress,
+        :imma_ldap => p.imma_ldap_server,
+        :default_route => p.default_route,
+        :default_iface => p.default_iface,
+        :dns      => {
+                        :soa   => p.dig(p.domainname, 'SOA' ),
+                        :ldaps => p.dig(['_ldaps._tcp',p.domainname].join('.'),'SRV' ),
+                        :mx    => p.dig(p.domainname, 'MX' ),
+                        :ns    => p.dig(p.domainname, 'NS' ),
+                        :a     => p.dig(p.domainname, 'A' ),
+                        :ptr   => Array.new,
+                     },
+        :vpn => p.vpn_data(p.domainname)
+}
+ 
+# add some things that depend on the element being pre-defined as an array in a hash before we can reference the hash...
+p.dig(p.domainname, 'A' ).each do | ptr | data.fetch(:dns).fetch(:ptr).push(ptr) end
+
+require 'yaml'
+puts YAML::dump( data )
+
+== 
+
+will generate an anonymous data struct I can use in my erb like: ( I don't need nearly all of this)
+
+--- 
+:imma_ldap: false
+:fqdn: eir.websages.com
+:vpn: 
+- :vpn_ip: 172.16.0.2
+  :network: 172.16.0.64
+  :cidr: 172.16.0.64/27
+  :netmask: 255.255.255.224
+  :pool: 32
+  :pub_ip: 65.19.178.106
+  :peer: odin.websages.com
+- :vpn_ip: 172.16.0.1
+  :network: 172.16.0.32
+  :cidr: 172.16.0.32/27
+  :netmask: 255.255.255.224
+  :pool: 32
+  :pub_ip: 72.14.177.235
+  :peer: freyr.websages.com
+- :vpn_ip: 172.16.0.3
+  :network: 172.16.0.96
+  :cidr: 172.16.0.96/27
+  :netmask: 255.255.255.224
+  :pool: 32
+  :pub_ip: 207.192.74.54
+  :peer: thor.websages.com
+- :vpn_ip: 172.16.0.10
+  :network: 172.16.0.128
+  :cidr: 172.16.0.128/27
+  :netmask: 255.255.255.224
+  :pool: 32
+  :pub_ip: 74.207.230.73
+  :peer: loki.websages.com
+- :vpn_ip: 172.16.0.11
+  :network: 172.16.0.160
+  :cidr: 172.16.0.160/27
+  :netmask: 255.255.255.224
+  :pool: 32
+  :pub_ip: 74.207.235.127
+  :peer: vili.websages.com
+:dns: 
+  :ptr: 
+  - 65.19.178.106
+  - 72.14.177.235
+  :mx: 
+  - mail04.websages.com
+  - mail05.websages.com
+  - mail01.websages.com
+  - mail02.websages.com
+  - mail03.websages.com
+  :soa: 
+  - :refresh: 43200
+    :retry: 3600
+    :rname: hostmaster.websages.com
+    :expire: 1209600
+    :serial: 2009032401
+    :minimum: 3600
+    :mname: ns01.websages.com
+  :ns: 
+  - ns03.websages.com
+  - ns01.websages.com
+  - ns02.websages.com
+  :a: 
+  - 72.14.177.235
+  - 65.19.178.106
+  :ldaps: 
+  - :server: loki.websages.com
+    :port: 636
+  - :server: odin.websages.com
+    :port: 636
+  - :server: thor.websages.com
+    :port: 636
+  - :server: vili.websages.com
+    :port: 636
+  - :server: freyr.websages.com
+    :port: 636
+:basedn: dc=websages,dc=com
+:default_route: 172.17.2.1
+:default_iface: wlan0
+:hostname: eir
+:domain: websages.com
+:binddn: cn=eir,ou=Hosts,dc=websages,dc=com
+:ipaddress: 172.17.2.9
