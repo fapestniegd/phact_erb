@@ -1,10 +1,16 @@
 #!/usr/bin/ruby
 ################################################################################
-# My dependencei are under ./lib relative to this script
+# dependency paths
+
+# where our debian package puts netaddr
+$:.push('/var/lib/gems/1.8/gems/netaddr-1.5.0/lib/') if File.directory?('/var/lib/gems/1.8/gems/netaddr-1.5.0/lib/')
+
+# where the relative path to netaddr in our git repo:
 oldwd = Dir.getwd
 Dir.chdir(File.dirname($0))
-$:.push([Dir.getwd,"lib/netaddr/lib"].join('/'))
+$:.push([Dir.getwd,"lib/netaddr/lib"].join('/')) if File.directory?([Dir.getwd,"lib/netaddr/lib"].join('/'))
 Dir.chdir(oldwd)
+
 ################################################################################
 # external facts we can use to populate erbs
 ################################################################################
