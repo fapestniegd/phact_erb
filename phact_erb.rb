@@ -1,8 +1,13 @@
 #!/usr/bin/ruby
 ################################################################################
-# ecternal facts we can use to populate erbs
+# My dependencei are under ./lib relative to this script
+oldwd = Dir.getwd
+Dir.chdir(File.dirname($0))
+$:.push([Dir.getwd,"lib/netaddr/lib"].join('/'))
+Dir.chdir(oldwd)
 ################################################################################
-
+# external facts we can use to populate erbs
+################################################################################
 class PhactERB
   ################################################################################
   # "phacts"                                                                     #
@@ -47,7 +52,7 @@ class PhactERB
   def basedn
     begin
       self_basedn = self.domainname
-      self_basedn.sub!(/\./, ',dc=')
+      self_basedn.gsub!(/\./, ',dc=')
       self_basedn = [ "dc=",self_basedn ].join
     end
   end
@@ -63,6 +68,7 @@ class PhactERB
   end
 
   def dig( record, type )
+    #pp fuck =  { :record => record, :type => type }
     result = []
     begin
       require 'resolv'
@@ -100,6 +106,16 @@ class PhactERB
             @type.sub!(/.*::/, '')
             if @type == type
                 result.push(response.address.to_s)
+            end
+        end
+        return result
+      ##########################################################################
+      when 'NS'
+        @dns_res.each_resource( record, Resolv::DNS::Resource::IN::ANY ) do | response |
+            @type = response.class.to_s
+            @type.sub!(/.*::/, '')
+            if @type == type
+                result.push(response.name.to_s)
             end
         end
         return result
@@ -240,48 +256,205 @@ class PhactERB
             end
         end
         if iface[:name]
-          ifcfg.push({ iface[:name] => iface.clone })
+          ifcfg.push( iface.clone )
         end
       end
       return ifcfg
     end
   end
 
+  def route
+    rtable = []
+    begin
+      out = IO.popen('/sbin/route -n') do |io|
+        routes_raw = io.read
+        @route = routes_raw.split(/\n/)
+        @route.each do | line |
+          line.sub!(/\s+$/,'');
+            if match = line.scan(/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\s+([A-Z]+)\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)\s+(\S+)/)[0 .. 7][0]
+              rtable.push({
+                            :destination => match[0],
+                            :gateway     => match[1],
+                            :genmask     => match[2],
+                            :flags       => match[3],
+                            :metric      => match[4],
+                            :ref         => match[5],
+                            :use         => match[6],
+                            :iface       => match[7],
+                          });
+            end
+        end
+      end
+    end
+    return rtable
+  end
+
+  def default_route
+      self.route.each do | route |
+          if route[:destination] == '0.0.0.0'
+            return route[:gateway]
+          end
+      end
+  end
+
+  def default_iface
+      self.route.each do | route |
+          if route[:destination] == '0.0.0.0'
+            return route[:iface]
+          end
+      end
+  end
+
+  def default_ipaddress
+      self.route.each do | route |
+          if route[:destination] == '0.0.0.0'
+            name = route[:iface]
+            self.ifconfig.each do | interface |
+              if name == interface[:name]
+                 return interface[:ipv4]
+              end
+            end
+            #return interfaces.fetch(interface).fetch('ipv4')
+          end
+      end
+  end
+
+  def imma_ldap_server
+      self.dig(['_ldaps._tcp',self.domainname].join('.'),'SRV' ).each do | srv |
+        if srv[:server] == self.fqdn
+          return true
+        end
+      end
+      return false
+  end
+
+  def vpn_peer_ip(peer_dn)
+    peer_parts = peer_dn.split(',')
+    filter = peer_parts.shift
+    basedn = peer_parts.join(',')
+    self.lsearch( basedn, filter, ['ipHostNumber'] ).fetch('ipHostNumber').each do | ip |
+        return ip unless self.is_rfc1918(ip) 
+    end
+  end
+
+  def vpn_peer_hostname(peer_dn)
+    peer_parts = peer_dn.split(',')
+    hostname = peer_parts.shift.sub(/^cn=/,'')
+    host_ou = peer_parts.shift
+    domain = peer_parts.join(',').gsub(',dc=','.').sub(/^dc=/,'')
+    return [hostname, domain].join('.')
+  end
+  
+  def is_rfc1918(ip_address)
+    begin
+      require 'netaddr'
+    rescue LoadError
+      warn 'IP functions will not be accurate due to the missing netaddr.rb library'
+      return false
+    end  
+    ipcidr4 = NetAddr::CIDR.create(ip_address)
+    cidr_8 = NetAddr::CIDR.create('10.0.0.0/8')
+    if cidr_8.contains?(ipcidr4)
+      return true
+    end
+    cidr_12 = NetAddr::CIDR.create('172.16.0.0/12')
+    if cidr_12.contains?(ipcidr4)
+      return true
+    end
+    cidr_16 = NetAddr::CIDR.create('192.168.0.0/16')
+    if cidr_16.contains?(ipcidr4)
+      return true
+    end
+    return false
+  end
+
+  def vpn_private_ipaddress(peer_dn)
+    peer_parts = peer_dn.split(',')
+    filter = peer_parts.shift
+    basedn = peer_parts.join(',')
+    self.lsearch( basedn, filter, ['ipHostNumber'] ).fetch('ipHostNumber').sort.each do | ip |
+      if self.is_rfc1918(ip) 
+        return ip 
+      end
+    end
+  end
+
+  def vpn_data(domain)
+    begin
+      require 'netaddr'
+    rescue LoadError
+      warn 'IP functions will not be accurate due to the missing netaddr library'
+      return false
+    end  
+    @vpndata = []
+    peers = self.lsearch( 
+                          ["ou=VPNs,ou=Sets,",self.basedn].join,  # search base
+                          ["(cn=",domain,")"].join ,     # filter
+                          ["uniqueMember"]
+                     ).fetch("uniqueMember").each do | peer_dn |
+       dnparts = peer_dn.split(/,/)
+       filter = dnparts.shift
+       searchbase = dnparts.join(',')
+       ou_part = dnparts.shift
+       domain = dnparts.join(',').gsub(',dc=','.').gsub(/^dc=/,'')
+       hostname = filter.clone.sub!(/.*=/,'')
+       fqdn = [ hostname, domain ].join('.')
+       rwarriors = self.lsearch( 
+                                    ["ou=Networks,",self.basedn].join, 
+                                    ["(cn=",hostname,"-vpn-anon)"].join ,
+                                    ['ipHostNumber','ipNetmaskNumber','ipNetworkNumber']
+                                  )
+       pub_ip = self.vpn_peer_ip(peer_dn)
+       begin
+       @vpndata.push({
+                       :peer     => fqdn,
+                       :pub_ip   => pub_ip,
+                       :vpn_ip   => self.vpn_private_ipaddress(peer_dn),
+                       :network  => rwarriors.fetch('ipHostNumber')[0],
+                       :netmask  => rwarriors.fetch('ipNetmaskNumber')[0],
+                       :cidr     => rwarriors.fetch('ipNetworkNumber')[0],
+                       :pool     => NetAddr::CIDR.create(rwarriors.fetch('ipNetworkNumber')[0]).size,
+                   })
+       rescue IndexError
+           warn 'Item with missing or invalid data ignored'
+       end
+     end
+     return @vpndata 
+  end
+
 ################################################################################
 # "tests"                                                                      #
 
 require 'pp' 
+
 p = PhactERB.new
-domain = p.domainname
 data ={
         :fqdn     => p.fqdn,
         :hostname => p.hostname,
-        :domain   => domain,
+        :domain   => p.domainname,
         :basedn   => p.basedn,
         :binddn   => p.binddn,
-        :bindpw   => p.bindpw,
-        :secret   => p.secret,
+        #:bindpw   => p.bindpw,
+        #:secret   => p.secret,
+        :ipaddress => p.default_ipaddress,
+        :imma_ldap => p.imma_ldap_server,
+        :default_route => p.default_route,
+        :default_iface => p.default_iface,
         :dns      => {
-                        :soa   => p.dig(domain, 'SOA' ),
-                        :ldaps => p.dig(['_ldaps._tcp',domain].join('.'),'SRV' ),
-                        :mx    => p.dig(domain, 'MX' ),
-                        :a     => p.dig(domain, 'A' ),
-                        :ptr   => [],
+                        :soa   => p.dig(p.domainname, 'SOA' ),
+                        :ldaps => p.dig(['_ldaps._tcp',p.domainname].join('.'),'SRV' ),
+                        :mx    => p.dig(p.domainname, 'MX' ),
+                        :ns    => p.dig(p.domainname, 'NS' ),
+                        :a     => p.dig(p.domainname, 'A' ),
+                        :ptr   => Array.new,
                      },
+        :vpn => p.vpn_data(p.domainname)
 }
-
-data.fetch(:dns).fetch(:a).each do | a |
-  ptrs = p.dig(a,'PTR' )
-  ptrs.each do |ptr|
-    data.fetch(:dns).fetch(:ptr).push(ptr)
-  end
-end
+# add some things that depend on the element being pre-defined as an array in a hash before we can reference the hash...
+p.dig(p.domainname, 'A' ).each do | ptr | data.fetch(:dns).fetch(:ptr).push(ptr) end
 
 require 'yaml'
 puts YAML::dump( data )
-puts YAML::dump( p.lsearch(p.basedn,"(uid=whitejs)",['cn','uid','userPassword']) )
-puts YAML::dump( p.lsearch( ["ou=VPNs,ou=Sets,",p.basedn].join, ["(cn=",domain,")"].join ,['uniqueMember']) )
-puts YAML::dump( p.ifconfig )
 
 #                                                                              #
 ################################################################################
