@@ -387,7 +387,7 @@ class PhactERB
   def self_vpn_data
     vpn_data(self.domainname).each do | peer |
       if peer[:peer] == self.fqdn
-          return peer[:peer].clone
+          return peer.clone
       end
     end
     return nil
