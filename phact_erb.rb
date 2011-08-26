@@ -52,6 +52,7 @@ class PhactERB
     begin
       @self_domain = self.fqdn
       @self_domain.sub!(/^[^.]+\./, '')
+      @self_domain.chomp
     end
   end
   
