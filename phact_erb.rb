@@ -1,4 +1,5 @@
 #!/usr/bin/ruby
+
 ################################################################################
 # dependency paths
 
@@ -384,15 +385,7 @@ class PhactERB
   end
 
   def self_vpn_data
-    vpn_data(self.domainname).each do | peer |
-      if peer[:peer] == self.fqdn
-          return peer.clone
-      end
-    end
-    return nil
-  end
-
-  def vpn_data(domain)
+    domain=self.domainname
     begin
       require 'netaddr'
     rescue LoadError
@@ -418,18 +411,65 @@ class PhactERB
                                     ['ipHostNumber','ipNetmaskNumber','ipNetworkNumber']
                                   )
        pub_ip = self.vpn_peer_ip(peer_dn)
-       begin
-       @vpndata.push({
-                       :peer     => fqdn,
-                       :pub_ip   => pub_ip,
-                       :vpn_ip   => self.vpn_private_ipaddress(peer_dn),
-                       :network  => rwarriors.fetch('ipHostNumber')[0],
-                       :netmask  => rwarriors.fetch('ipNetmaskNumber')[0],
-                       :cidr     => rwarriors.fetch('ipNetworkNumber')[0],
-                       :pool     => NetAddr::CIDR.create(rwarriors.fetch('ipNetworkNumber')[0]).size,
-                   })
-       rescue IndexError
-           warn 'Item with missing or invalid data ignored'
+       if fqdn == self.fqdn
+         begin
+           @vpndata.push({
+                           :peer     => fqdn,
+                           :pub_ip   => pub_ip,
+                           :vpn_ip   => self.vpn_private_ipaddress(peer_dn),
+                           :network  => rwarriors.fetch('ipHostNumber')[0],
+                           :netmask  => rwarriors.fetch('ipNetmaskNumber')[0],
+                           :cidr     => rwarriors.fetch('ipNetworkNumber')[0],
+                           :pool     => NetAddr::CIDR.create(rwarriors.fetch('ipNetworkNumber')[0]).size,
+                       })
+         rescue IndexError
+             warn 'Item with missing or invalid data ignored'
+         end
+       end
+     end
+     return @vpndata 
+  end
+
+  def peer_vpn_data(domain)
+    begin
+      require 'netaddr'
+    rescue LoadError
+      warn 'IP functions will not be accurate due to the missing netaddr library'
+      return false
+    end  
+    @vpndata = []
+    peers = self.lsearch( 
+                          ["ou=VPNs,ou=Sets,",self.basedn].join,  # search base
+                          ["(cn=",domain,")"].join ,     # filter
+                          ["uniqueMember"]
+                     ).fetch("uniqueMember").each do | peer_dn |
+       dnparts = peer_dn.split(/,/)
+       filter = dnparts.shift
+       searchbase = dnparts.join(',')
+       ou_part = dnparts.shift
+       domain = dnparts.join(',').gsub(',dc=','.').gsub(/^dc=/,'')
+       hostname = filter.clone.sub!(/.*=/,'')
+       fqdn = [ hostname, domain ].join('.')
+       rwarriors = self.lsearch( 
+                                    ["ou=Networks,",self.basedn].join, 
+                                    ["(cn=",hostname,"-vpn-anon)"].join ,
+                                    ['ipHostNumber','ipNetmaskNumber','ipNetworkNumber']
+                                  )
+       pub_ip = self.vpn_peer_ip(peer_dn)
+       if fqdn != self.fqdn
+         begin
+           @vpndata.push({
+                           :peer     => fqdn,
+                           :pub_ip   => pub_ip,
+                           :vpn_ip   => self.vpn_private_ipaddress(peer_dn),
+                           :network  => rwarriors.fetch('ipHostNumber')[0],
+                           :netmask  => rwarriors.fetch('ipNetmaskNumber')[0],
+                           :cidr     => rwarriors.fetch('ipNetworkNumber')[0],
+                           :pool     => NetAddr::CIDR.create(rwarriors.fetch('ipNetworkNumber')[0]).size,
+                       })
+         rescue IndexError
+             warn 'Item with missing or invalid data ignored'
+         end
        end
      end
      return @vpndata 
