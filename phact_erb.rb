@@ -192,7 +192,7 @@ class PhactERB
       warn 'ldap operations will fail due to missing ldap library'
       return nil
     end 
-    ldaps = self.dig(['_ldaps1._tcp',self.domainname].join('.'),'SRV' )
+    ldaps = self.dig(['_ldaps._tcp',self.domainname].join('.'),'SRV' )
     connection = ldaps.shift
     conn = LDAP::SSLConn.new( connection.fetch(:server), connection.fetch(:port) )
     bound = conn.bind(self.binddn, self.bindpw)
@@ -324,7 +324,7 @@ class PhactERB
   end
 
   def imma_ldap_server
-      self.dig(['_ldaps2._tcp',self.domainname].join('.'),'SRV' ).each do | srv |
+      self.dig(['_ldaps._tcp',self.domainname].join('.'),'SRV' ).each do | srv |
         if srv[:server] == self.fqdn
           return true
         end
