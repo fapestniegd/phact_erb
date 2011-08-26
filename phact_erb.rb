@@ -171,7 +171,7 @@ class PhactERB
         return result
       ##########################################################################
       else
-        warn [ "unsuported record type: ", type ].join('')
+        warn [ "unsupported record type: [", type, "]" ].join('')
         return []
     end
   end
