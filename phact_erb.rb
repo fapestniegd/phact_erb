@@ -25,10 +25,10 @@ class PhactERB
           out = IO.popen('hostname -f') do |io|
             @fqdn = io.read
           end
-          return @fqdn.chomp
+          return @fqdn
       end
       @fqdn = Socket.gethostname
-      return @fqdn.chomp
+      return @fqdn
     end
   end
 
@@ -53,6 +53,7 @@ class PhactERB
       @self_domain = self.fqdn
       @self_domain.sub!(/^[^.]+\./, '')
       @self_domain.chomp
+      @self_domain.gsub(/\n/,'');
     end
   end
   
