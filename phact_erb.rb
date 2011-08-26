@@ -25,10 +25,10 @@ class PhactERB
           out = IO.popen('hostname -f') do |io|
             @fqdn = io.read
           end
-          return @fqdn
+          return @fqdn.chomp
       end
       @fqdn = Socket.gethostname
-      return @fqdn
+      return @fqdn.chomp
     end
   end
 
@@ -192,7 +192,7 @@ class PhactERB
       warn 'ldap operations will fail due to missing ldap library'
       return nil
     end 
-    domain = self.domainname.chomp
+    domain = self.domainname
     ldaps = self.dig(['_ldaps._tcp',domain].join('.'),'SRV' )
     connection = ldaps.shift
     conn = LDAP::SSLConn.new( connection.fetch(:server), connection.fetch(:port) )
