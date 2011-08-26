@@ -192,7 +192,7 @@ class PhactERB
       warn 'ldap operations will fail due to missing ldap library'
       return nil
     end 
-    domain = self.domainname
+    domain = self.domainname.chomp
     ldaps = self.dig(['_ldaps._tcp',domain].join('.'),'SRV' )
     connection = ldaps.shift
     conn = LDAP::SSLConn.new( connection.fetch(:server), connection.fetch(:port) )
@@ -216,7 +216,7 @@ class PhactERB
             line.sub!(/\s+$/,'');
             if match = line.scan(/(^[a-z0-9]+)\s+Link encap:(.*)/)[0 .. 1][0]
               if iface[:name]
-                  ifcfg.push({ iface[:name] => iface.clone })
+                  ifcfg.push( iface.clone )
               end
               iface[:name] = match[0]
               iface[:encap] = match[1]
@@ -258,7 +258,6 @@ class PhactERB
             elsif match = line.scan(/Interrupt:([0-9]+) Base address:(\S+)/)[0..1][0]
               iface[:interrupt] = match[0]
               iface[:base_address] = match[1]
-
             end
         end
         if iface[:name]
