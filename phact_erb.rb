@@ -193,7 +193,7 @@ class PhactERB
       warn 'ldap operations will fail due to missing ldap library'
       return nil
     end 
-    domain = self.domainname
+    domain = self.domainname.chomp
     ldaps = self.dig(['_ldaps._tcp',domain].join('.'),'SRV' )
     connection = ldaps.shift
     conn = LDAP::SSLConn.new( connection.fetch(:server), connection.fetch(:port) )
