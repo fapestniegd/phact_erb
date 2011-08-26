@@ -392,7 +392,6 @@ class PhactERB
       warn 'IP functions will not be accurate due to the missing netaddr library'
       return false
     end  
-    @vpndata = []
     peers = self.lsearch( 
                           ["ou=VPNs,ou=Sets,",self.basedn].join,  # search base
                           ["(cn=",domain,")"].join ,     # filter
@@ -413,7 +412,7 @@ class PhactERB
        pub_ip = self.vpn_peer_ip(peer_dn)
        if fqdn == self.fqdn
          begin
-           @vpndata.push({
+           return {
                            :peer     => fqdn,
                            :pub_ip   => pub_ip,
                            :vpn_ip   => self.vpn_private_ipaddress(peer_dn),
@@ -421,13 +420,13 @@ class PhactERB
                            :netmask  => rwarriors.fetch('ipNetmaskNumber')[0],
                            :cidr     => rwarriors.fetch('ipNetworkNumber')[0],
                            :pool     => NetAddr::CIDR.create(rwarriors.fetch('ipNetworkNumber')[0]).size,
-                       })
+                   }
          rescue IndexError
              warn 'Item with missing or invalid data ignored'
          end
        end
      end
-     return @vpndata 
+     return nil
   end
 
   def peer_vpn_data(domain)
